@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Lottery Number Picker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: { 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { -webkit-tap-highlight-color: transparent; }
+    .number-ball {
+      width: 3.1rem; height: 3.1rem;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 9999px; font-weight: 700; font-size: 1.2rem;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.15);
+    }
+    .bonus-ball {
+      width: 3.1rem; height: 3.1rem;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 9999px; font-weight: 700; font-size: 1.2rem;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.15);
+      background: linear-gradient(135deg, #f59e0b, #d97706); color: white;
+    }
+    @media (min-width: 400px) {
+      .number-ball, .bonus-ball { width: 3.5rem; height: 3.5rem; font-size: 1.35rem; }
+    }
+  </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen transition-colors">
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // ---------- Curated lottery data ----------
+    const LOTTERY_DATA = [
+      {
+        id: "germany", name: "Germany", region: "Europe",
+        games: [
+          { id: "6aus49", name: "Lotto 6aus49", mainCount: 6, mainMax: 49, bonusCount: 1, bonusMin: 0, bonusMax: 9, bonusLabel: "Superzahl", resultsUrl: "https://www.lotto.de/lotto-6aus49/zahlen" },
+          { id: "eurojackpot-de", name: "Eurojackpot", mainCount: 5, mainMax: 50, bonusCount: 2, bonusMin: 1, bonusMax: 12, bonusLabel: "Eurozahlen", resultsUrl: "https://www.lotto.de/eurojackpot/zahlen" },
+          { id: "euromillions-de", name: "EuroMillions", mainCount: 5, mainMax: 50, bonusCount: 2, bonusMin: 1, bonusMax: 12, bonusLabel: "Lucky Stars", resultsUrl: "https://www.euro-millions.com/results" },
+          { id: "spiel77", name: "Spiel 77", mainCount: 7, mainMax: 9, bonusCount: 0, bonusMin: 0, bonusMax: 0, bonusLabel: "", digitMode: true, digitMin: 0, digitMax: 9, resultsUrl: "https://www.lotto.de/spiel-77/zahlen" },
+          { id: "super6", name: "Super 6", mainCount: 6, mainMax: 9, bonusCount: 0, bonusMin: 0, bonusMax: 0, bonusLabel: "", digitMode: true, digitMin: 0, digitMax: 9, resultsUrl: "https://www.lotto.de/super-6/zahlen" },
+        ]
+      },
+      {
+        id: "mexico", name: "Mexico", region: "Americas",
+        games: [
+          { id: "melate", name: "Melate", mainCount: 6, mainMax: 56, bonusCount: 1, bonusMin: 1, bonusMax: 56, bonusLabel: "Adicional", bonusFromMainPool: true, resultsUrl: "https://www.loterianacional.gob.mx/" },
+          { id: "chispazo", name: "Chispazo", mainCount: 5, mainMax: 28, bonusCount: 0, bonusMin: 0, bonusMax: 0, bonusLabel: "", resultsUrl: "https://www.loterianacional.gob.mx/" },
+        ]
+      },
+      {
+        id: "austria", name: "Austria", region: "Europe",
+        games: [
+          { id: "lotto-at", name: "Lotto 6aus45", mainCount: 6, mainMax: 45, bonusCount: 0, bonusMin: 0, bonusMax: 0, bonusLabel: "", resultsUrl: "https://www.win2day.at/game/lotto" },
+          { id: "eurojackpot-at", name: "Eurojackpot", mainCount: 5, mainMax: 50, bonusCount: 2, bonusMin: 1, bonusMax: 12, bonusLabel: "Eurozahlen", resultsUrl: "https://www.lotto.de/eurojackpot/zahlen" },
+          { id: "euromillions-at", name: "EuroMillions", mainCount: 5, mainMax: 50, bonusCount: 2, bonusMin: 1, bonusMax: 12, bonusLabel: "Lucky Stars", resultsUrl: "https://www.euro-millions.com/results" },
+        ]
+      },
+      {
+        id: "switzerland", name: "Switzerland", region: "Europe",
+        games: [
+          { id: "swiss-lotto", name: "Swiss Lotto", mainCount: 6, mainMax: 42, bonusCount: 1, bonusMin: 1, bonusMax: 6, bonusLabel: "Lucky Number" },
+          { id: "euromillions-ch", name: "EuroMillions", mainCount: 5, mainMax: 50, bonusCount: 2, bonusMin: 1, bonusMax: 12, bonusLabel: "Lucky Stars" },
+        ]
+      },
+      {
+        id: "united-kingdom", name: "United Kingdom", region: "Europe",
+        games: [
+          { id: "uk-lotto", name: "Lotto", mainCount: 6, mainMax: 59, bonusCount: 0, bonusMin: 0, bonusMax: 0, bonusLabel: "", resultsUrl: "https://www.national-lottery.co.uk/results/lotto/draw-history" },
+          { id: "thunderball", name: "Thunderball", mainCount: 5, mainMax: 39, bonusCount: 1, bonusMin: 1, bonusMax: 14, bonusLabel: "Thunderball", resultsUrl: "https://www.national-lottery.co.uk/results/thunderball/draw-history" },
+          { id: "set-for-life", name: "Set For Life", mainCount: 5, mainMax: 47, bonusCount: 1, bonusMin: 1, bonusMax: 10, bonusLabel: "Life Ball" },
+          { id: "euromillions-uk", name: "EuroMillions", mainCount: 5, mainMax: 50, bonusCount: 2, bonusMin: 1, bonusMax: 12, bonusLabel: "Lucky Stars", resultsUrl: "https://www.national-lottery.co.uk/results/euromillions/draw-history" },
+        ]
+      },
+      {
+        id: "france", name: "France", region: "Europe",
+        games: [
+          { id: "loto-fr", name: "Loto", mainCount: 5, mainMax: 49, bonusCount: 1, bonusMin: 1, bonusMax: 10, bonusLabel: "Numéro Chance", resultsUrl: "https://www.fdj.fr/jeux-et-gains/loto/resultats" },
+          { id: "euromillions-fr", name: "EuroMillions", mainCount: 5, mainMax: 50, bonusCount: 2, bonusMin: 1, bonusMax: 12, bonusLabel: "Lucky Stars", resultsUrl: "https://www.fdj.fr/jeux-et-gains/euromillions-my-million/resultats" },
+        ]
+      },
+      {
+        id: "spain", name: "Spain", region: "Europe",
+        games: [
+          { id: "primitiva", name: "La Primitiva", mainCount: 6, mainMax: 49, bonusCount: 1, bonusMin: 0, bonusMax: 9, bonusLabel: "Reintegro", resultsUrl: "https://www.loteriasyapuestas.es/es/la-primitiva" },
+          { id: "bonoloto", name: "Bonoloto", mainCount: 6, mainMax: 49, bonusCount: 0, bonusMin: 0, bonusMax: 0, bonusLabel: "" },
+          { id: "euromillions-es", name: "EuroMillions", mainCount: 5, mainMax: 50, bonusCount: 2, bonusMin: 1, bonusMax: 12, bonusLabel: "Lucky Stars", resultsUrl: "https://www.loteriasyapuestas.es/es/euromillones" },
+        ]
+      },
+      {
+        id: "italy", name: "Italy", region: "Europe",
+        games: [
+          { id: "superena-lotto", name: "SuperEnalotto", mainCount: 6, mainMax: 90, bonusCount: 0, bonusMin: 0, bonusMax: 0, bonusLabel: "" },
+          { id: "euromillions-it", name: "EuroMillions", mainCount: 5, mainMax: 50, bonusCount: 2, bonusMin: 1, bonusMax: 12, bonusLabel: "Lucky Stars" },
+        ]
+      },
+      {
+        id: "poland", name: "Poland", region: "Europe",
+        games: [
+          { id: "lotto-pl", name: "Lotto", mainCount: 6, mainMax: 49, bonusCount: 0, bonusMin: 0, bonusMax: 0, bonusLabel: "" },
+          { id: "eurojackpot-pl", name: "Eurojackpot", mainCount: 5, mainMax: 50, bonusCount: 2, bonusMin: 1, bonusMax: 12, bonusLabel: "Eurozahlen", resultsUrl: "https://www.lotto.pl/eurojackpot/wyniki-i-wygrane" },
+        ]
+      },
+      {
+        id: "netherlands", name: "Netherlands", region: "Europe",
+        games: [
+          { id: "lotto-nl", name: "Lotto", mainCount: 6, mainMax: 45, bonusCount: 0, bonusMin: 0, bonusMax: 0, bonusLabel: "" },
+          { id: "euromillions-nl", name: "EuroMillions", mainCount: 5, mainMax: 50, bonusCount: 2, bonusMin: 1, bonusMax: 12, bonusLabel: "Lucky Stars" },
+        ]
+      },
+      {
+        id: "united-states", name: "United States", region: "Americas",
+        games: [
+          { id: "powerball", name: "Powerball", mainCount: 5, mainMax: 69, bonusCount: 1, bonusMin: 1, bonusMax: 26, bonusLabel: "Powerball", resultsUrl: "https://www.powerball.com/games/home" },
+          { id: "megamillions", name: "Mega Millions", mainCount: 5, mainMax: 70, bonusCount: 1, bonusMin: 1, bonusMax: 24, bonusLabel: "Mega Ball", resultsUrl: "https://www.megamillions.com/" },
+        ]
+      },
+      {
+        id: "canada", name: "Canada", region: "Americas",
+        games: [
+          { id: "lotto-649", name: "Lotto 6/49", mainCount: 6, mainMax: 49, bonusCount: 0, bonusMin: 0, bonusMax: 0, bonusLabel: "" },
+          { id: "lotto-max", name: "Lotto Max", mainCount: 7, mainMax: 50, bonusCount: 0, bonusMin: 0, bonusMax: 0, bonusLabel: "" },
+        ]
+      },
+      {
+        id: "australia", name: "Australia", region: "Asia-Pacific",
+        games: [
+          { id: "oz-lotto", name: "Oz Lotto", mainCount: 7, mainMax: 47, bonusCount: 3, bonusMin: 1, bonusMax: 47, bonusLabel: "Supplementary", bonusFromMainPool: true, resultsUrl: "https://www.ozlotteries.com/oz-lotto/results" },
+          { id: "powerball-au", name: "Powerball", mainCount: 7, mainMax: 35, bonusCount: 1, bonusMin: 1, bonusMax: 20, bonusLabel: "Powerball", resultsUrl: "https://www.ozlotteries.com/powerball/results" },
+          { id: "saturday-lotto", name: "Saturday Lotto", mainCount: 6, mainMax: 45, bonusCount: 2, bonusMin: 1, bonusMax: 45, bonusLabel: "Supplementary", bonusFromMainPool: true },
+        ]
+      },
+      {
+        id: "south-africa", name: "South Africa", region: "Africa & Middle East",
+        games: [
+          { id: "lotto-za", name: "Lotto", mainCount: 6, mainMax: 52, bonusCount: 0, bonusMin: 0, bonusMax: 0, bonusLabel: "" },
+          { id: "powerball-za", name: "Powerball", mainCount: 5, mainMax: 50, bonusCount: 1, bonusMin: 1, bonusMax: 20, bonusLabel: "Powerball" },
+        ]
+      },
+    ];
+
+    const translations = {
+      en: {
+        appTitle: "Lottery Number Picker",
+        beTester: "Be a tester",
+        testerPitch: "Testers get new lotteries and features first, and can propose what to build next. One Gmail is enough. No payment, no account in the app.",
+        testerCountry: "Your country",
+        testerGmail: "Gmail used on your phone",
+        testerIdea: "A feature you want (optional)",
+        testerSend: "Email me",
+        setup: "Choose Lottery",
+        country: "Country",
+        lottery: "Lottery",
+        selectCountry: "Select country…",
+        selectLottery: "Select lottery…",
+        summary: "Selected",
+        custom: "Custom / Manual",
+        start: "Start Drawing",
+        mainNumbers: "Main numbers",
+        howManyMain: "How many main numbers?",
+        mainFrom: "Main numbers from 1 to",
+        bonusSection: "Bonus / Superzahl",
+        howManyBonus: "How many bonus numbers?",
+        bonusFrom: "Bonus from",
+        bonusTo: "to",
+        nextNumber: "Next Number",
+        nextBonus: "Next Bonus",
+        combination: "Main Numbers",
+        bonus: "Bonus",
+        done: "Complete",
+        saveTicket: "Save Ticket",
+        newTicket: "New Ticket",
+        redraw: "Redraw",
+        history: "Saved Tickets",
+        noTickets: "No saved tickets yet",
+        delete: "Delete",
+        back: "Back",
+        settings: "Settings",
+        language: "Language",
+        darkMode: "Dark mode",
+        clearHistory: "Clear all",
+        byLottery: "By lottery",
+        byDate: "By date",
+        tickets: "tickets",
+        openTicket: "Open",
+        allTickets: "All tickets",
+        confirmClear: "Delete all saved tickets?",
+        saved: "Ticket saved!",
+        remaining: "Remaining",
+        numbers: "numbers",
+        lotteryName: "Name (optional)",
+        addPhoto: "Add photo",
+        viewPhoto: "View photo",
+        removePhoto: "Remove photo",
+        checkResults: "Check results",
+        officialNumbers: "Official numbers (space or comma)",
+        compare: "Compare",
+        matches: "Matches",
+        youWon: "You matched some numbers!",
+        noMatch: "No matches",
+        close: "Close",
+        support: "Support",
+        photoSaved: "Photo added",
+        openResults: "Official results",
+        manualCompare: "Manual compare",
+        photoConsentTitle: "Allow photo?",
+        photoConsentMsg: "Camera/files access is only used when you add a ticket photo.",
+        allow: "Allow",
+        deny: "Not now",
+        randomShort: "Completely random · every combination equally likely",
+        randomTitle: "How the numbers are drawn",
+        randomBody1: "The numbers are generated completely at random using a cryptographically secure random number generator (the same class of randomness used in encryption).",
+        randomBody2: "Every possible combination has exactly the same chance. There is no pattern, no \"hot\" or \"cold\" numbers, and nothing is influenced by previous draws or by us.",
+        randomBody3: "This gives you the same mathematical chance as any other valid set of numbers.",
+        gotIt: "Got it",
+        webVersion: "Web version",
+        openWeb: "Open web version",
+        copyLink: "Copy link",
+        linkCopied: "Link copied",
+        shareHint: "Share this link with others (works in any browser).",
+      },
+      de: {
+        appTitle: "Lotto Zahlen Generator",
+        beTester: "Tester werden",
+        testerPitch: "Tester bekommen neue Lotterien und Funktionen zuerst und können Vorschläge machen. Eine Gmail-Adresse genügt. Kein Konto, kein Geld.",
+        testerCountry: "Dein Land",
+        testerGmail: "Gmail auf dem Telefon",
+        testerIdea: "Wunschfeature (optional)",
+        testerSend: "E-Mail senden",
+        setup: "Lotto wählen",
+        country: "Land",
+        lottery: "Lotterie",
+        selectCountry: "Land wählen…",
+        selectLottery: "Lotterie wählen…",
+        summary: "Auswahl",
+        custom: "Benutzerdefiniert",
+        start: "Ziehung starten",
+        mainNumbers: "Hauptzahlen",
+        howManyMain: "Wie viele Hauptzahlen?",
+        mainFrom: "Hauptzahlen von 1 bis",
+        bonusSection: "Superzahl / Bonus",
+        howManyBonus: "Wie viele Bonus-Zahlen?",
+        bonusFrom: "Bonus von",
+        bonusTo: "bis",
+        nextNumber: "Nächste Zahl",
+        nextBonus: "Nächster Bonus",
+        combination: "Hauptzahlen",
+        bonus: "Bonus",
+        done: "Fertig",
+        saveTicket: "Tipp speichern",
+        newTicket: "Neuer Tipp",
+        redraw: "Neu ziehen",
+        history: "Gespeicherte Tipps",
+        noTickets: "Noch keine Tipps",
+        delete: "Löschen",
+        back: "Zurück",
+        settings: "Einstellungen",
+        language: "Sprache",
+        darkMode: "Dunkelmodus",
+        clearHistory: "Alles löschen",
+        byLottery: "Nach Lotterie",
+        byDate: "Nach Datum",
+        tickets: "Tipps",
+        openTicket: "Öffnen",
+        allTickets: "Alle Tipps",
+        confirmClear: "Wirklich alle löschen?",
+        saved: "Tipp gespeichert!",
+        remaining: "Verbleibend",
+        numbers: "Zahlen",
+        lotteryName: "Name (optional)",
+        addPhoto: "Foto hinzufügen",
+        viewPhoto: "Foto ansehen",
+        removePhoto: "Foto entfernen",
+        checkResults: "Ergebnisse prüfen",
+        officialNumbers: "Offizielle Zahlen (Leerzeichen/Komma)",
+        compare: "Vergleichen",
+        matches: "Treffer",
+        youWon: "Du hast Zahlen getroffen!",
+        noMatch: "Keine Treffer",
+        close: "Schließen",
+        support: "Support",
+        photoSaved: "Foto hinzugefügt",
+        openResults: "Offizielle Ergebnisse",
+        manualCompare: "Manuell prüfen",
+        photoConsentTitle: "Foto erlauben?",
+        photoConsentMsg: "Kamera/Dateien nur beim Foto eines Tipps.",
+        allow: "Erlauben",
+        deny: "Nicht jetzt",
+        randomShort: "Völlig zufällig · jede Kombination gleich wahrscheinlich",
+        randomTitle: "Wie die Zahlen gezogen werden",
+        randomBody1: "Die Zahlen werden vollständig zufällig mit einem kryptographisch sicheren Zufallsgenerator erzeugt (dieselbe Klasse von Zufall wie in der Verschlüsselung).",
+        randomBody2: "Jede mögliche Kombination hat genau die gleiche Chance. Es gibt kein Muster, keine \"heißen\" oder \"kalten\" Zahlen, und nichts wird von früheren Ziehungen oder von uns beeinflusst.",
+        randomBody3: "Das gibt dir dieselbe mathematische Chance wie jede andere gültige Zahlenkombination.",
+        gotIt: "Verstanden",
+        webVersion: "Web-Version",
+        openWeb: "Web-Version öffnen",
+        copyLink: "Link kopieren",
+        linkCopied: "Link kopiert",
+        shareHint: "Diesen Link teilen (funktioniert in jedem Browser).",
+      },
+      es: {
+        appTitle: "Generador de Números",
+        beTester: "Ser tester",
+        testerPitch: "Quien prueba recibe primero las loterías y funciones nuevas, y puede proponer las siguientes. Basta un Gmail. Sin cuenta y sin pago.",
+        testerCountry: "Tu país",
+        testerGmail: "Gmail del teléfono",
+        testerIdea: "Una función que quieres (opcional)",
+        testerSend: "Enviar correo",
+        setup: "Elegir Lotería",
+        country: "País",
+        lottery: "Lotería",
+        selectCountry: "Seleccionar país…",
+        selectLottery: "Seleccionar lotería…",
+        summary: "Seleccionado",
+        custom: "Personalizado",
+        start: "Empezar sorteo",
+        mainNumbers: "Números principales",
+        howManyMain: "¿Cuántos números?",
+        mainFrom: "Del 1 al",
+        bonusSection: "Bonus / Superzahl",
+        howManyBonus: "¿Cuántos bonus?",
+        bonusFrom: "Bonus desde",
+        bonusTo: "hasta",
+        nextNumber: "Siguiente",
+        nextBonus: "Siguiente bonus",
+        combination: "Principales",
+        bonus: "Bonus",
+        done: "Completo",
+        saveTicket: "Guardar",
+        newTicket: "Nuevo",
+        redraw: "Otra vez",
+        history: "Guardados",
+        noTickets: "Sin boletos",
+        delete: "Eliminar",
+        back: "Volver",
+        settings: "Ajustes",
+        language: "Idioma",
+        darkMode: "Modo oscuro",
+        clearHistory: "Borrar todo",
+        byLottery: "Por lotería",
+        byDate: "Por fecha",
+        tickets: "boletos",
+        openTicket: "Abrir",
+        allTickets: "Todos",
+        confirmClear: "¿Borrar todos?",
+        saved: "¡Guardado!",
+        remaining: "Quedan",
+        numbers: "números",
+        lotteryName: "Nombre (opcional)",
+        addPhoto: "Añadir foto",
+        viewPhoto: "Ver foto",
+        removePhoto: "Quitar foto",
+        checkResults: "Comprobar resultados",
+        officialNumbers: "Números oficiales (espacio o coma)",
+        compare: "Comparar",
+        matches: "Aciertos",
+        youWon: "¡Has acertado números!",
+        noMatch: "Sin aciertos",
+        close: "Cerrar",
+        support: "Soporte",
+        photoSaved: "Foto añadida",
+        openResults: "Resultados oficiales",
+        manualCompare: "Comparar manual",
+        photoConsentTitle: "¿Permitir foto?",
+        photoConsentMsg: "Cámara/archivos solo al añadir foto del boleto.",
+        allow: "Permitir",
+        deny: "Ahora no",
+        randomShort: "Completamente al azar · cada combinación igual de probable",
+        randomTitle: "Cómo se obtienen los números",
+        randomBody1: "Los números se generan completamente al azar con un generador criptográficamente seguro (la misma clase de azar que en el cifrado).",
+        randomBody2: "Cada combinación posible tiene exactamente la misma probabilidad. No hay patrón, ni números \"calientes\" o \"fríos\", y nada depende de sorteos anteriores ni de nosotros.",
+        randomBody3: "Esto te da la misma probabilidad matemática que cualquier otro conjunto válido de números.",
+        gotIt: "Entendido",
+        webVersion: "Versión web",
+        openWeb: "Abrir versión web",
+        copyLink: "Copiar enlace",
+        linkCopied: "Enlace copiado",
+        shareHint: "Comparte este enlace (funciona en cualquier navegador).",
+      }
+    };
+
+    const STORAGE_KEY = "lottery-picker-v4-tickets";
+    const WEB_APP_URL = "https://riacht.github.io/lottery-picker/";
+    const PLAY_STORE_URL = "";
+    const SETTINGS_KEY = "lottery-picker-v4-settings";
+
+    function loadTickets() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch { return []; }
+    }
+    function saveTickets(t) { localStorage.setItem(STORAGE_KEY, JSON.stringify(t)); }
+    function loadSettings() {
+      try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}"); } catch { return {}; }
+    }
+    function saveSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
+
+    function NumberBall({ num }) {
+      return <div className="number-ball bg-primary-600 text-white">{num}</div>;
+    }
+    function BonusBall({ num }) {
+      return <div className="bonus-ball">{num}</div>;
+    }
+
+    function App() {
+      const saved = loadSettings();
+      const [lang, setLang] = useState(saved.lang || "en");
+      const [dark, setDark] = useState(saved.dark ?? true);
+      const [view, setView] = useState("setup");
+      const [tickets, setTickets] = useState(loadTickets);
+
+      const [countryId, setCountryId] = useState(saved.countryId || "germany");
+      const [gameId, setGameId] = useState(saved.gameId || "6aus49");
+      const [manual, setManual] = useState(false);
+
+      const [lotteryName, setLotteryName] = useState("");
+      const [mainCount, setMainCount] = useState(6);
+      const [mainMax, setMainMax] = useState(49);
+      const [bonusCount, setBonusCount] = useState(1);
+      const [bonusMin, setBonusMin] = useState(0);
+      const [bonusMax, setBonusMax] = useState(9);
+      const [bonusLabel, setBonusLabel] = useState("Superzahl");
+      const [testerCountry, setTesterCountry] = useState("");
+      const [testerGmail, setTesterGmail] = useState("");
+      const [testerNote, setTesterNote] = useState("");
+
+      const [mainPool, setMainPool] = useState([]);
+      const [mainNums, setMainNums] = useState([]);
+      const [bonusNums, setBonusNums] = useState([]);
+      const [phase, setPhase] = useState("main");
+      const [message, setMessage] = useState("");
+      const [savedThisDraw, setSavedThisDraw] = useState(false);
+      const [photoConsent, setPhotoConsent] = useState(false);
+      const [checkTicketId, setCheckTicketId] = useState(null);
+      const [officialInput, setOfficialInput] = useState("");
+      const [matchResult, setMatchResult] = useState(null);
+      const [histNav, setHistNav] = useState(null);
+      const [showRandomInfo, setShowRandomInfo] = useState(false);
+      const [showRandomTip, setShowRandomTip] = useState(false);
+      const [linkMsg, setLinkMsg] = useState("");
+
+      const t = translations[lang] || translations.en;
+
+      const selectedCountry = useMemo(
+        () => LOTTERY_DATA.find(c => c.id === countryId) || LOTTERY_DATA[0],
+        [countryId]
+      );
+      const selectedGame = useMemo(
+        () => selectedCountry.games.find(g => g.id === gameId) || selectedCountry.games[0],
+        [selectedCountry, gameId]
+      );
+
+      useEffect(() => {
+        if (!manual && selectedGame) {
+          setMainCount(selectedGame.mainCount);
+          setMainMax(selectedGame.mainMax);
+          setBonusCount(selectedGame.bonusCount);
+          setBonusMin(selectedGame.bonusMin);
+          setBonusMax(selectedGame.bonusMax);
+          setBonusLabel(selectedGame.bonusLabel || "Bonus");
+          setLotteryName(selectedGame.name);
+        }
+      }, [selectedGame, manual]);
+
+      useEffect(() => {
+        saveSettings({ lang, dark, countryId, gameId });
+        document.documentElement.classList.toggle("dark", dark);
+      }, [lang, dark, countryId, gameId]);
+
+      const secureRandomInt = (maxExclusive) => {
+        if (maxExclusive <= 0) return 0;
+        const range = maxExclusive;
+        const arr = new Uint32Array(1);
+        const max = Math.floor(0x100000000 / range) * range;
+        let x;
+        do {
+          crypto.getRandomValues(arr);
+          x = arr[0];
+        } while (x >= max);
+        return x % range;
+      };
+
+      const shuffle = (arr) => {
+        const a = [...arr];
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = secureRandomInt(i + 1);
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      };
+
+      const addPhotoToTicket = (ticketId, dataUrl) => {
+        const updated = tickets.map(tk =>
+          tk.id === ticketId ? { ...tk, photo: dataUrl } : tk
+        );
+        setTickets(updated);
+        saveTickets(updated);
+        setMessage(t.photoSaved);
+        setTimeout(() => setMessage(""), 2000);
+      };
+
+      const removePhoto = (ticketId) => {
+        const updated = tickets.map(tk => {
+          if (tk.id === ticketId) {
+            const { photo, ...rest } = tk;
+            return rest;
+          }
+          return tk;
+        });
+        setTickets(updated);
+        saveTickets(updated);
+      };
+
+      const onPhotoSelected = (ticketId, file) => {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => addPhotoToTicket(ticketId, reader.result);
+        reader.readAsDataURL(file);
+      };
+
+      const runCompare = (ticket) => {
+        const parts = officialInput
+          .split(/[\s,;.]+/)
+          .map(s => parseInt(s, 10))
+          .filter(n => !isNaN(n));
+        const mainSet = new Set(ticket.mainNums);
+        const bonusSet = new Set(ticket.bonusNums || []);
+        let mainHits = 0, bonusHits = 0;
+        const seen = new Set();
+        parts.forEach(n => {
+          if (seen.has(n)) return;
+          seen.add(n);
+          if (mainSet.has(n)) mainHits++;
+          else if (bonusSet.has(n)) bonusHits++;
+        });
+        setMatchResult({ mainHits, bonusHits, total: mainHits + bonusHits, entered: parts });
+      };
+
+      const startDrawing = () => {
+        const digits = selectedGame && selectedGame.digitMode;
+        if (!digits && (mainCount < 1 || mainMax < mainCount)) {
+          alert("Invalid main numbers settings");
+          return;
+        }
+        setMainPool(digits ? [] : shuffle(Array.from({ length: mainMax }, (_, i) => i + 1)));
+        setMainNums([]);
+        setBonusNums([]);
+        setPhase("main");
+        setMessage("");
+        setSavedThisDraw(false);
+        setView("draw");
+      };
+
+      const drawNext = () => {
+        if (phase === "main" && selectedGame && selectedGame.digitMode) {
+          const lo = selectedGame.digitMin ?? 0;
+          const hi = selectedGame.digitMax ?? 9;
+          const next = lo + secureRandomInt(hi - lo + 1);
+          const updated = [...mainNums, next];
+          setMainNums(updated);
+          if (updated.length >= mainCount) setPhase(bonusCount > 0 ? "bonus" : "done");
+          return;
+        }
+        if (phase === "main") {
+          if (mainPool.length === 0) return;
+          const next = mainPool[0];
+          const updated = [...mainNums, next].sort((a, b) => a - b);
+          setMainPool(mainPool.slice(1));
+          setMainNums(updated);
+          if (updated.length >= mainCount) {
+            setPhase(bonusCount > 0 ? "bonus" : "done");
+          }
+        } else if (phase === "bonus") {
+          const fromMain = selectedGame && selectedGame.bonusFromMainPool;
+          let next;
+          if (fromMain) {
+            const remaining = Array.from({ length: mainMax }, (_, i) => i + 1)
+              .filter(n => !mainNums.includes(n) && !bonusNums.includes(n));
+            if (remaining.length === 0) return;
+            next = remaining[secureRandomInt(remaining.length)];
+          } else {
+            next = bonusMin + secureRandomInt(bonusMax - bonusMin + 1);
+          }
+          const updated = [...bonusNums, next];
+          setBonusNums(updated);
+          if (updated.length >= bonusCount) setPhase("done");
+        }
+      };
+
+      const emailTester = () => {
+        const gmail = testerGmail.trim();
+        if (!gmail.includes("@")) {
+          alert(t.testerGmail);
+          return;
+        }
+        const subject = encodeURIComponent("Lotty tester");
+        const body = encodeURIComponent(
+          "country,gmail,note\n" +
+          testerCountry.trim() + "," + gmail + ",\"" + testerNote.replace(/"/g, "'") + "\""
+        );
+        window.location.href = "mailto:riacht+lotty@gmail.com?subject=" + subject + "&body=" + body;
+      };
+
+      const saveCurrentTicket = () => {
+        const ticket = {
+          id: Date.now(),
+          name: lotteryName.trim() || selectedGame?.name || `\( {mainCount}/ \){mainMax}`,
+          country: selectedCountry?.name || "",
+          date: new Date().toISOString(),
+          mainNums: [...mainNums],
+          bonusNums: [...bonusNums],
+          bonusLabel: bonusLabel,
+          resultsUrl: selectedGame?.resultsUrl || ""
+        };
+        const updated = [ticket, ...tickets];
+        setTickets(updated);
+        saveTickets(updated);
+        setSavedThisDraw(true);
+        setMessage(t.saved);
+        setTimeout(() => setMessage(""), 2500);
+      };
+
+      const deleteTicket = (id) => {
+        const updated = tickets.filter(tk => tk.id !== id);
+        setTickets(updated);
+        saveTickets(updated);
+      };
+
+      const clearAllTickets = () => {
+        if (confirm(t.confirmClear)) {
+          setTickets([]);
+          saveTickets([]);
+        }
+      };
+
+      const copyWebLink = async () => {
+        try {
+          await navigator.clipboard.writeText(WEB_APP_URL);
+          setLinkMsg(t.linkCopied);
+          setTimeout(() => setLinkMsg(""), 2000);
+        } catch {
+          prompt("Copy link:", WEB_APP_URL);
+        }
+      };
+
+      if (view === "setup") {
+        return (
+          <div className="max-w-md mx-auto p-4 min-h-screen flex flex-col">
+            <header className="flex justify-between items-center mb-5 pt-2">
+              <h1 className="text-xl font-bold">{t.appTitle}</h1>
+              <div className="flex gap-2">
+                <button onClick={() => setView("history")} className="px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-sm">{t.history}</button>
+                <button onClick={() => setView("settings")} className="px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-sm">⚙️</button>
+              </div>
+            </header>
+
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-lg space-y-4 flex-1">
+              <h2 className="text-lg font-semibold">{t.setup}</h2>
+
+              <label className="block">
+                <span className="text-sm text-gray-500 dark:text-gray-400">{t.country}</span>
+                <select value={countryId}
+                  onChange={e => {
+                    setCountryId(e.target.value);
+                    const c = LOTTERY_DATA.find(x => x.id === e.target.value);
+                    if (c && c.games.length) setGameId(c.games[0].id);
+                    setManual(false);
+                  }}
+                  className="mt-1 w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-base">
+                  {LOTTERY_DATA.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="text-sm text-gray-500 dark:text-gray-400">{t.lottery}</span>
+                <select value={gameId}
+                  onChange={e => { setGameId(e.target.value); setManual(false); }}
+                  className="mt-1 w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-base">
+                  {selectedCountry.games.map(g => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="rounded-xl bg-primary-600/10 dark:bg-primary-600/20 border border-primary-600/30 p-4">
+                <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.summary}</div>
+                <div className="font-bold text-lg">{lotteryName || selectedGame?.name}</div>
+                <div className="text-sm mt-1">
+                  {mainCount} {t.numbers} (1–{mainMax})
+                  {bonusCount > 0 && (
+                    <span> + {bonusCount} {bonusLabel || t.bonus} ({bonusMin}–{bonusMax})</span>
+                  )}
+                </div>
+              </div>
+
+              <button onClick={() => setManual(!manual)}
+                className="text-sm text-primary-600 dark:text-primary-400 underline">
+                {manual ? "▲ Hide manual settings" : `▼ ${t.custom}`}
+              </button>
+
+              {manual && (
+                <div className="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
+                  <label className="block">
+                    <span className="text-sm text-gray-500">{t.lotteryName}</span>
+                    <input type="text" value={lotteryName} onChange={e => setLotteryName(e.target.value)}
+                      className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700" />
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="text-sm text-gray-500">{t.howManyMain}</span>
+                      <input type="number" min="1" max="20" value={mainCount}
+                        onChange={e => setMainCount(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 font-semibold" />
+                    </label>
+                    <label className="block">
+                      <span className="text-sm text-gray-500">{t.mainFrom}</span>
+                      <input type="number" min="2" max="100" value={mainMax}
+                        onChange={e => setMainMax(Math.max(2, parseInt(e.target.value) || 2))}
+                        className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 font-semibold" />
+                    </label>
+                  </div>
+                  <label className="block">
+                    <span className="text-sm text-gray-500">{t.howManyBonus}</span>
+                    <input type="number" min="0" max="10" value={bonusCount}
+                      onChange={e => setBonusCount(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 font-semibold" />
+                  </label>
+                  {bonusCount > 0 && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="block">
+                        <span className="text-sm text-gray-500">{t.bonusFrom}</span>
+                        <input type="number" value={bonusMin}
+                          onChange={e => setBonusMin(parseInt(e.target.value) || 0)}
+                          className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 font-semibold" />
+                      </label>
+                      <label className="block">
+                        <span className="text-sm text-gray-500">{t.bonusTo}</span>
+                        <input type="number" value={bonusMax}
+                          onChange={e => setBonusMax(parseInt(e.target.value) || 0)}
+                          className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 font-semibold" />
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm space-y-2">
+                <div className="font-semibold">{t.beTester}</div>
+                <p className="text-xs text-gray-600 dark:text-gray-300">{t.testerPitch}</p>
+                <input type="text" value={testerCountry} placeholder={t.testerCountry}
+                  onChange={e => setTesterCountry(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700" />
+                <input type="email" value={testerGmail} placeholder={t.testerGmail}
+                  onChange={e => setTesterGmail(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700" />
+                <textarea value={testerNote} placeholder={t.testerIdea} rows={2}
+                  onChange={e => setTesterNote(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700" />
+                <button type="button" onClick={emailTester}
+                  className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold">
+                  {t.testerSend}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 mt-2">
+                <button onClick={startDrawing}
+                  className="flex-1 py-4 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-bold text-lg active:scale-95 transition">
+                  {t.start}
+                </button>
+                <button type="button" onClick={() => setShowRandomInfo(true)}
+                  className="w-12 h-12 shrink-0 rounded-xl bg-gray-200 dark:bg-gray-700 text-lg font-bold flex items-center justify-center"
+                  aria-label="Info">ⓘ</button>
+              </div>
+            </div>
+            {showRandomInfo && (
+              <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setShowRandomInfo(false)}>
+                <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+                  <h3 className="text-lg font-bold mb-3">{t.randomTitle}</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{t.randomBody1}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{t.randomBody2}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mb-5">{t.randomBody3}</p>
+                  <button onClick={() => setShowRandomInfo(false)}
+                    className="w-full py-3 rounded-xl bg-primary-600 text-white font-semibold">{t.gotIt}</button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      if (view === "draw") {
+        const isDone = phase === "done";
+        const isBonusPhase = phase === "bonus";
+        return (
+          <div className="max-w-md mx-auto p-4 min-h-screen flex flex-col">
+            <header className="flex justify-between items-center mb-4 pt-2">
+              <button onClick={() => setView("setup")} className="text-sm text-primary-600 dark:text-primary-400">← {t.back}</button>
+              <div className="text-sm font-medium truncate max-w-[55%]">{lotteryName || selectedGame?.name}</div>
+              <button onClick={() => setView("history")} className="text-sm text-gray-500">{t.history}</button>
+            </header>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-lg flex-1 flex flex-col">
+              <div className="mb-5">
+                <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">{t.combination}</div>
+                <div className="flex flex-wrap gap-2 justify-center min-h-[3.5rem]">
+                  {mainNums.length === 0 ? <span className="text-gray-400 text-sm">—</span> :
+                    mainNums.map((n, i) => <NumberBall key={i} num={n} />)}
+                </div>
+              </div>
+              {bonusCount > 0 && (
+                <div className="mb-5">
+                  <div className="text-sm font-medium text-amber-600 dark:text-amber-400 mb-2">{bonusLabel || t.bonus}</div>
+                  <div className="flex flex-wrap gap-2 justify-center min-h-[3.5rem]">
+                    {bonusNums.length === 0 ? <span className="text-gray-400 text-sm">—</span> :
+                      bonusNums.map((n, i) => <BonusBall key={i} num={n} />)}
+                  </div>
+                </div>
+              )}
+              <div className="text-center text-sm text-gray-500 dark:text-gray-400 mb-2">
+                {phase === "main" && <>{t.remaining}: <strong>{mainPool.length}</strong> {t.numbers}</>}
+                {isBonusPhase && <>{bonusLabel || t.bonus} ({bonusNums.length}/{bonusCount})</>}
+                {isDone && <span className="text-green-600 dark:text-green-400 font-semibold">{t.done}</span>}
+              </div>
+              <div className="relative mb-4 flex justify-center"
+                onMouseEnter={() => setShowRandomTip(true)}
+                onMouseLeave={() => setShowRandomTip(false)}>
+                <button type="button" onClick={() => setShowRandomInfo(true)}
+                  className="text-center text-xs text-gray-500 dark:text-gray-400 w-full cursor-help underline-offset-2 hover:underline">
+                  {t.randomShort}
+                </button>
+                {showRandomTip && (
+                  <div className="hidden sm:block absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-[min(100%,20rem)] z-20 px-3 py-2 rounded-lg bg-gray-900 text-white text-xs leading-snug shadow-lg pointer-events-none">
+                    {t.randomBody2}
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+                  </div>
+                )}
+              </div>
+              {message && <div className="mb-4 text-center text-green-600 dark:text-green-400 font-medium">{message}</div>}
+              <div className="mt-auto space-y-3">
+                {!isDone ? (
+                  <button onClick={drawNext}
+                    className="w-full py-5 rounded-2xl bg-primary-600 hover:bg-primary-700 text-white font-bold text-xl shadow-lg active:scale-95 transition">
+                    {isBonusPhase ? t.nextBonus : t.nextNumber}
+                  </button>
+                ) : (
+                  <button onClick={saveCurrentTicket}
+                    disabled={savedThisDraw}
+                    className={`w-full py-4 rounded-xl text-white font-semibold ${savedThisDraw ? "bg-gray-400 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"}`}>
+                    {savedThisDraw ? t.saved : t.saveTicket}
+                  </button>
+                )}
+                <div className="flex gap-2">
+                  <button onClick={startDrawing} className="flex-1 py-2.5 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-medium">{t.redraw}</button>
+                  <button onClick={startDrawing} className="flex-1 py-2.5 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-medium">{t.newTicket}</button>
+                </div>
+              </div>
+            </div>
+            {showRandomInfo && (
+              <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setShowRandomInfo(false)}>
+                <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+                  <h3 className="text-lg font-bold mb-3">{t.randomTitle}</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{t.randomBody1}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{t.randomBody2}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mb-5">{t.randomBody3}</p>
+                  <button onClick={() => setShowRandomInfo(false)}
+                    className="w-full py-3 rounded-xl bg-primary-600 text-white font-semibold">{t.gotIt}</button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      
+            {showRandomInfo && (
+              <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setShowRandomInfo(false)}>
+                <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+                  <h3 className="text-lg font-bold mb-3">{t.randomTitle}</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{t.randomBody1}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{t.randomBody2}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mb-5">{t.randomBody3}</p>
+                  <button onClick={() => setShowRandomInfo(false)}
+                    className="w-full py-3 rounded-xl bg-primary-600 text-white font-semibold">{t.gotIt}</button>
+                </div>
+              </div>
+            )}
+
+      if (view === "history") {
+        const byLottery = {};
+        tickets.forEach(tk => {
+          const name = tk.name || "Unknown";
+          const day = (tk.date || "").slice(0, 10) || "unknown";
+          if (!byLottery[name]) byLottery[name] = {};
+          if (!byLottery[name][day]) byLottery[name][day] = [];
+          byLottery[name][day].push(tk);
+        });
+        const lotteryNames = Object.keys(byLottery).sort();
+
+        const renderTicketCard = (tk) => (
+          <div key={tk.id} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow">
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <div className="font-semibold">{tk.name}</div>
+                <div className="text-xs text-gray-500">{tk.country && `${tk.country} · `}{new Date(tk.date).toLocaleString()}</div>
+              </div>
+              <button onClick={() => deleteTicket(tk.id)} className="text-red-500 text-sm">{t.delete}</button>
+            </div>
+            <div className="mt-2">
+              <div className="text-xs text-gray-500 mb-1">{t.combination}</div>
+              <div className="flex flex-wrap gap-1.5">
+                {tk.mainNums.map((n, i) => (
+                  <span key={i} className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary-600 text-white text-sm font-bold">{n}</span>
+                ))}
+              </div>
+            </div>
+            {tk.bonusNums?.length > 0 && (
+              <div className="mt-2">
+                <div className="text-xs text-amber-600 dark:text-amber-400 mb-1">{tk.bonusLabel || t.bonus}</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {tk.bonusNums.map((n, i) => (
+                    <span key={i} className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-500 text-white text-sm font-bold">{n}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {tk.photo && (
+              <div className="mt-3">
+                <img src={tk.photo} alt="ticket" className="max-h-40 rounded-lg border border-gray-200 dark:border-gray-600" />
+              </div>
+            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(() => {
+                const url = tk.resultsUrl || (LOTTERY_DATA.flatMap(c => c.games).find(g => g.name === tk.name) || {}).resultsUrl;
+                return url ? (
+                  <a href={url} target="_blank" rel="noopener noreferrer"
+                    className="px-3 py-1.5 rounded-lg bg-primary-600 text-white text-xs">{t.openResults}</a>
+                ) : null;
+              })()}
+              <button onClick={() => { setCheckTicketId(checkTicketId === tk.id ? null : tk.id); setOfficialInput(""); setMatchResult(null); }}
+                className="px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-xs">{t.manualCompare}</button>
+              {!photoConsent ? (
+                <button onClick={() => setPhotoConsent(true)}
+                  className="px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-xs">{t.addPhoto}</button>
+              ) : (
+                <label className="px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-xs cursor-pointer">
+                  {tk.photo ? t.viewPhoto : t.addPhoto}
+                  <input type="file" accept="image/*" capture="environment" className="hidden"
+                    onChange={e => onPhotoSelected(tk.id, e.target.files && e.target.files[0])} />
+                </label>
+              )}
+              {tk.photo && (
+                <button onClick={() => removePhoto(tk.id)}
+                  className="px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-xs">{t.removePhoto}</button>
+              )}
+            </div>
+            {checkTicketId === tk.id && (
+              <div className="mt-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+                <div className="text-sm mb-2">{t.officialNumbers}</div>
+                <input type="text" value={officialInput} onChange={e => setOfficialInput(e.target.value)}
+                  placeholder="e.g. 3 12 19 27 34 41"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm mb-2" />
+                <div className="flex gap-2">
+                  <button onClick={() => runCompare(tk)}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm">{t.compare}</button>
+                  <button onClick={() => { setCheckTicketId(null); setMatchResult(null); }}
+                    className="px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-sm">{t.close}</button>
+                </div>
+                {matchResult && (
+                  <div className="mt-3 text-sm">
+                    {matchResult.total > 0 ? (
+                      <div className="text-green-600 dark:text-green-400 font-semibold">
+                        🙂 {t.youWon} ({t.matches}: {matchResult.mainHits}
+                        {matchResult.bonusHits > 0 ? ` + ${matchResult.bonusHits} bonus` : ""})
+                      </div>
+                    ) : (
+                      <div className="text-gray-500">😐 {t.noMatch}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+
+        let body;
+        if (tickets.length === 0) {
+          body = <p className="text-center text-gray-500 mt-12">{t.noTickets}</p>;
+        } else if (!histNav) {
+          body = (
+            <div className="space-y-2">
+              <div className="text-sm text-gray-500 mb-2">{t.byLottery}</div>
+              {lotteryNames.map(name => {
+                const count = Object.values(byLottery[name]).reduce((a, arr) => a + arr.length, 0);
+                return (
+                  <button key={name} onClick={() => setHistNav({ lottery: name })}
+                    className="w-full text-left px-4 py-3 rounded-xl bg-white dark:bg-gray-800 shadow flex justify-between items-center">
+                    <span className="font-medium">{name}</span>
+                    <span className="text-sm text-gray-500">{count} {t.tickets}</span>
+                  </button>
+                );
+              })}
+            </div>
+          );
+        } else if (histNav.lottery && !histNav.day && !histNav.ticketId) {
+          const days = Object.keys(byLottery[histNav.lottery] || {}).sort().reverse();
+          body = (
+            <div className="space-y-2">
+              <button onClick={() => setHistNav(null)} className="text-sm text-primary-600 dark:text-primary-400 mb-2">← {t.byLottery}</button>
+              <div className="font-semibold mb-2">{histNav.lottery}</div>
+              <div className="text-sm text-gray-500 mb-2">{t.byDate}</div>
+              {days.map(day => (
+                <button key={day} onClick={() => setHistNav({ lottery: histNav.lottery, day })}
+                  className="w-full text-left px-4 py-3 rounded-xl bg-white dark:bg-gray-800 shadow flex justify-between items-center">
+                  <span>{day}</span>
+                  <span className="text-sm text-gray-500">{byLottery[histNav.lottery][day].length} {t.tickets}</span>
+                </button>
+              ))}
+            </div>
+          );
+        } else if (histNav.lottery && histNav.day && !histNav.ticketId) {
+          const list = (byLottery[histNav.lottery] || {})[histNav.day] || [];
+          body = (
+            <div className="space-y-3">
+              <button onClick={() => setHistNav({ lottery: histNav.lottery })} className="text-sm text-primary-600 dark:text-primary-400 mb-2">← {histNav.lottery}</button>
+              <div className="font-semibold mb-2">{histNav.lottery} · {histNav.day}</div>
+              {list.map(tk => (
+                <button key={tk.id} onClick={() => setHistNav({ lottery: histNav.lottery, day: histNav.day, ticketId: tk.id })}
+                  className="w-full text-left px-4 py-3 rounded-xl bg-white dark:bg-gray-800 shadow mb-2 flex justify-between">
+                  <span className="text-sm">{new Date(tk.date).toLocaleTimeString()} · {(tk.mainNums || []).join(", ")}</span>
+                  <span className="text-xs text-primary-600">{t.openTicket}</span>
+                </button>
+              ))}
+            </div>
+          );
+        } else if (histNav.ticketId) {
+          const tk = tickets.find(x => x.id === histNav.ticketId);
+          body = (
+            <div className="space-y-3">
+              <button onClick={() => setHistNav({ lottery: histNav.lottery, day: histNav.day })}
+                className="text-sm text-primary-600 dark:text-primary-400 mb-2">← {histNav.day}</button>
+              {tk ? renderTicketCard(tk) : <p className="text-gray-500">—</p>}
+            </div>
+          );
+        }
+
+        return (
+          <div className="max-w-md mx-auto p-4 min-h-screen">
+            <header className="flex justify-between items-center mb-6 pt-2">
+              <button onClick={() => { setView("setup"); setHistNav(null); }} className="text-primary-600 dark:text-primary-400">← {t.back}</button>
+              <h1 className="text-lg font-bold">{t.history}</h1>
+              <button onClick={clearAllTickets} className="text-sm text-red-500">{t.clearHistory}</button>
+            </header>
+            {body}
+          </div>
+        );
+      }
+
+      if (view === "settings") {
+        return (
+          <div className="max-w-md mx-auto p-4 min-h-screen">
+            <header className="flex items-center mb-6 pt-2">
+              <button onClick={() => setView("setup")} className="text-primary-600 dark:text-primary-400 mr-4">← {t.back}</button>
+              <h1 className="text-lg font-bold">{t.settings}</h1>
+            </header>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow space-y-6">
+              <div>
+                <label className="block text-sm text-gray-500 dark:text-gray-400 mb-2">{t.language}</label>
+                <select value={lang} onChange={e => setLang(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">
+                  <option value="en">English</option>
+                  <option value="de">Deutsch</option>
+                  <option value="es">Español</option>
+                </select>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>{t.darkMode}</span>
+                <button onClick={() => setDark(!dark)}
+                  className={`w-14 h-8 rounded-full transition relative ${dark ? "bg-primary-600" : "bg-gray-300"}`}>
+                  <span className={`absolute top-1 w-6 h-6 bg-white rounded-full transition ${dark ? "left-7" : "left-1"}`} />
+                </button>
+              </div>
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-4 space-y-2">
+                <div className="text-sm font-medium mb-1">{t.webVersion}</div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t.shareHint}</p>
+                <a href={WEB_APP_URL} target="_blank" rel="noopener noreferrer"
+                  className="block w-full text-center py-3 rounded-xl bg-primary-600 text-white font-medium">
+                  {t.openWeb}
+                </a>
+                <button type="button" onClick={copyWebLink}
+                  className="block w-full text-center py-3 rounded-xl bg-gray-200 dark:bg-gray-700 font-medium">
+                  {t.copyLink}
+                </button>
+                {linkMsg && <div className="text-xs text-center text-green-600 dark:text-green-400">{linkMsg}</div>}
+                <div className="text-xs text-gray-500 text-center break-all">{WEB_APP_URL}</div>
+              </div>
+
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                <a href="mailto:support@example.com?subject=Lottery%20Number%20Picker%20Support"
+                  className="block w-full text-center py-3 rounded-xl bg-gray-200 dark:bg-gray-700 font-medium">
+                  {t.support}
+                </a>
+                <div className="text-xs text-gray-500 text-center mt-2">support@example.com</div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      return null;
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
