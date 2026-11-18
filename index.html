@@ -437,7 +437,7 @@
       const [bonusMax, setBonusMax] = useState(9);
       const [bonusLabel, setBonusLabel] = useState("Superzahl");
       const [testerCountry, setTesterCountry] = useState("");
-      const [testerGmail, setTesterGmail] = useState("");
+      const [testerGmail, setTesterGmail] = useState("user@gmail.com");  // ← default
       const [testerNote, setTesterNote] = useState("");
 
       const [mainPool, setMainPool] = useState([]);
@@ -602,13 +602,12 @@
           if (updated.length >= bonusCount) setPhase("done");
         }
       };
-
-      const emailTester = () => {
-        const gmail = testerGmail.trim();
-        if (!gmail.includes("@")) {
-          alert(t.testerGmail);
-          return;
-        }
+const emailTester = () => {
+  const gmail = (testerGmail.trim() || "user@gmail.com");
+  if (!gmail.includes("@")) {
+    alert(t.testerGmail);
+    return;
+  }
         const subject = encodeURIComponent("Lotty tester");
         const body = encodeURIComponent(
           "country,gmail,note\n" +
@@ -761,24 +760,66 @@
                   )}
                 </div>
               )}
+{/* ===== Be a tester ===== */}
+<div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm space-y-3">
+  <div className="font-semibold">{t.beTester}</div>
+  <p className="text-xs text-gray-600 dark:text-gray-300">{t.testerPitch}</p>
 
-              <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm space-y-2">
-                <div className="font-semibold">{t.beTester}</div>
-                <p className="text-xs text-gray-600 dark:text-gray-300">{t.testerPitch}</p>
-                <input type="text" value={testerCountry} placeholder={t.testerCountry}
-                  onChange={e => setTesterCountry(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700" />
-                <input type="email" value={testerGmail} placeholder={t.testerGmail}
-                  onChange={e => setTesterGmail(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700" />
-                <textarea value={testerNote} placeholder={t.testerIdea} rows={2}
-                  onChange={e => setTesterNote(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700" />
-                <button type="button" onClick={emailTester}
-                  className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold">
-                  {t.testerSend}
-                </button>
-              </div>
+  {/* 1. Country combo box */}
+  <label className="block">
+    <span className="text-xs text-gray-500 dark:text-gray-400">{t.testerCountry}</span>
+    <select
+      value={testerCountry}
+      onChange={e => setTesterCountry(e.target.value)}
+      className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+    >
+      <option value="">— select —</option>
+      <option value="DE">Germany (DE)</option>
+      <option value="NL">Netherlands (NL)</option>
+      <option value="US">United States (US)</option>
+      <option value="MX">Mexico (MX)</option>
+      <option value="AT">Austria (AT)</option>
+      <option value="CH">Switzerland (CH)</option>
+      <option value="GB">United Kingdom (GB)</option>
+      <option value="FR">France (FR)</option>
+      <option value="ES">Spain (ES)</option>
+      <option value="IT">Italy (IT)</option>
+      <option value="PL">Poland (PL)</option>
+      <option value="CA">Canada (CA)</option>
+      <option value="AU">Australia (AU)</option>
+      <option value="ZA">South Africa (ZA)</option>
+    </select>
+  </label>
+
+  {/* 2. Google ID – already filled */}
+  <label className="block">
+    <span className="text-xs text-gray-500 dark:text-gray-400">{t.testerGmail}</span>
+    <input
+      type="email"
+      value={testerGmail}
+      onChange={e => setTesterGmail(e.target.value)}
+      placeholder="user@gmail.com"
+      className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+    />
+  </label>
+
+  <textarea
+    value={testerNote}
+    placeholder={t.testerIdea}
+    rows={2}
+    onChange={e => setTesterNote(e.target.value)}
+    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+  />
+
+  <button
+    type="button"
+    onClick={emailTester}
+    className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold"
+  >
+    {t.testerSend}
+  </button>
+</div>
+
 
               <div className="flex items-center gap-2 mt-2">
                 <button onClick={startDrawing}
