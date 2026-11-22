@@ -422,30 +422,65 @@
 function App() {
   const saved = loadSettings();
 
+  // ---------- State ----------
   const [lang, setLang] = useState(saved.lang || "en");
   const [dark, setDark] = useState(saved.dark ?? true);
   const [activeTab, setActiveTab] = useState("draw");
 
-  // Keep your existing state variables for now
   const [countryId, setCountryId] = useState(saved.countryId || "germany");
   const [gameId, setGameId] = useState(saved.gameId || "6aus49");
   const [tickets, setTickets] = useState(loadTickets);
+
   const [testerCountry, setTesterCountry] = useState("");
   const [testerGmail, setTesterGmail] = useState("user@gmail.com");
   const [testerNote, setTesterNote] = useState("");
 
+  // Keep these for later (Draw tab)
+  const [manual, setManual] = useState(false);
+  const [lotteryName, setLotteryName] = useState("");
+  const [mainCount, setMainCount] = useState(6);
+  const [mainMax, setMainMax] = useState(49);
+  const [bonusCount, setBonusCount] = useState(1);
+  const [bonusMin, setBonusMin] = useState(0);
+  const [bonusMax, setBonusMax] = useState(9);
+  const [bonusLabel, setBonusLabel] = useState("Superzahl");
+
   const t = translations[lang] || translations.en;
 
-  // Save settings + handle RTL
+  const selectedCountry = useMemo(
+    () => LOTTERY_DATA.find(c => c.id === countryId) || LOTTERY_DATA[0],
+    [countryId]
+  );
+  const selectedGame = useMemo(
+    () => selectedCountry.games.find(g => g.id === gameId) || selectedCountry.games[0],
+    [selectedCountry, gameId]
+  );
+
+  // ---------- Effects ----------
   useEffect(() => {
     saveSettings({ lang, dark, countryId, gameId });
     document.documentElement.classList.toggle("dark", dark);
 
+    // RTL support for oriental languages
     const rtlLanguages = ["he", "ar"];
     document.documentElement.dir = rtlLanguages.includes(lang) ? "rtl" : "ltr";
     document.documentElement.lang = lang;
   }, [lang, dark, countryId, gameId]);
 
+  // Update game settings when lottery changes
+  useEffect(() => {
+    if (!manual && selectedGame) {
+      setMainCount(selectedGame.mainCount);
+      setMainMax(selectedGame.mainMax);
+      setBonusCount(selectedGame.bonusCount);
+      setBonusMin(selectedGame.bonusMin);
+      setBonusMax(selectedGame.bonusMax);
+      setBonusLabel(selectedGame.bonusLabel || "Bonus");
+      setLotteryName(selectedGame.name);
+    }
+  }, [selectedGame, manual]);
+
+  // ---------- Helpers ----------
   const emailTester = () => {
     const gmail = (testerGmail.trim() || "user@gmail.com");
     if (!gmail.includes("@")) {
@@ -460,26 +495,16 @@ function App() {
     window.location.href = "mailto:riacht+lotty@gmail.com?subject=" + subject + "&body=" + body;
   };
 
+  // ---------- Render ----------
   return (
     <div className="min-h-screen flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
 
       {/* ===== HEADER ===== */}
-      <header className="sticky top-0 z-20 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between">
-        <h1 className="text-lg font-bold truncate">{t.appTitle}</h1>
-
-        <div className="flex items-center gap-3">
-          <select
-            value={lang}
-            onChange={(e) => setLang(e.target.value)}
-            className="text-sm px-2 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700"
-          >
-            <option value="en">English</option>
-            <option value="de">Deutsch</option>
-            <option value="es">Español</option>
-            <option value="he">עברית</option>
-            <option value="ru">Русский</option>
-          </select>
-
+      <header className="sticky top-0 z-20 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 space-y-3 shadow-sm">
+        
+        {/* Title + Dark mode */}
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-bold truncate">{t.appTitle}</h1>
           <button
             onClick={() => setDark(!dark)}
             className={`w-11 h-6 rounded-full transition relative ${dark ? "bg-primary-600" : "bg-gray-300"}`}
@@ -487,28 +512,85 @@ function App() {
             <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition ${dark ? "left-5" : "left-0.5"}`} />
           </button>
         </div>
+
+        {/* Country + Lottery */}
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className="text-xs text-gray-500 dark:text-gray-400">{t.country}</span>
+            <select
+              value={countryId}
+              onChange={(e) => {
+                const newCountryId = e.target.value;
+                setCountryId(newCountryId);
+                const country = LOTTERY_DATA.find(c => c.id === newCountryId);
+                if (country && country.games.length > 0) {
+                  setGameId(country.games[0].id);
+                }
+              }}
+              className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm"
+            >
+              {LOTTERY_DATA.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="text-xs text-gray-500 dark:text-gray-400">{t.lottery}</span>
+            <select
+              value={gameId}
+              onChange={(e) => setGameId(e.target.value)}
+              className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm"
+            >
+              {(selectedCountry?.games || []).map(g => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {/* Language */}
+        <div className="flex justify-end">
+          <select
+            value={lang}
+            onChange={(e) => setLang(e.target.value)}
+            className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700"
+          >
+            <option value="en">English</option>
+            <option value="de">Deutsch</option>
+            <option value="es">Español</option>
+            <option value="he">עברית</option>
+            <option value="ru">Русский</option>
+          </select>
+        </div>
       </header>
 
       {/* ===== MAIN CONTENT ===== */}
       <main className="flex-1 overflow-y-auto p-4">
 
-        {/* DRAW TAB (temporary placeholder) */}
+        {/* DRAW TAB - Placeholder */}
         {activeTab === "draw" && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 text-center shadow">
             <h2 className="text-xl font-bold mb-2">{t.setup}</h2>
-            <p className="text-gray-500">Draw tab will come here</p>
+            <p className="text-gray-500 dark:text-gray-400 mb-1">
+              {selectedCountry?.name} → {selectedGame?.name}
+            </p>
+            <p className="text-sm text-gray-400">Draw tab coming next...</p>
           </div>
         )}
 
-        {/* TICKETS TAB (temporary placeholder) */}
+        {/* TICKETS TAB - Placeholder */}
         {activeTab === "tickets" && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 text-center shadow">
             <h2 className="text-xl font-bold mb-2">{t.history}</h2>
-            <p className="text-gray-500">Tickets tab will come here</p>
+            <p className="text-gray-500 dark:text-gray-400">
+              {tickets.length} {t.tickets}
+            </p>
+            <p className="text-sm text-gray-400 mt-2">Tickets tab coming next...</p>
           </div>
         )}
 
-        {/* SUPPORT TAB (working) */}
+        {/* SUPPORT TAB */}
         {activeTab === "support" && (
           <div className="space-y-4">
             {/* Be a Tester */}
@@ -569,7 +651,7 @@ function App() {
               </button>
             </div>
 
-            {/* Support & Web */}
+            {/* Support & Web links */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow space-y-3">
               <a
                 href="mailto:riacht+lotty@gmail.com?subject=Lottery%20Number%20Picker%20Support"
@@ -592,41 +674,40 @@ function App() {
       </main>
 
       {/* ===== BOTTOM TABS ===== */}
-      <nav className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex">
+      <nav className="sticky bottom-0 z-20 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex">
         <button
           onClick={() => setActiveTab("draw")}
-          className={`flex-1 py-3 flex flex-col items-center text-xs font-medium ${
-            activeTab === "draw" ? "text-primary-600" : "text-gray-500"
+          className={`flex-1 py-3 flex flex-col items-center text-xs font-medium transition ${
+            activeTab === "draw" ? "text-primary-600 dark:text-primary-400" : "text-gray-500"
           }`}
         >
-          <span className="text-xl">🎲</span>
+          <span className="text-xl mb-0.5">🎲</span>
           <span>{t.setup}</span>
         </button>
 
         <button
           onClick={() => setActiveTab("tickets")}
-          className={`flex-1 py-3 flex flex-col items-center text-xs font-medium ${
-            activeTab === "tickets" ? "text-primary-600" : "text-gray-500"
+          className={`flex-1 py-3 flex flex-col items-center text-xs font-medium transition ${
+            activeTab === "tickets" ? "text-primary-600 dark:text-primary-400" : "text-gray-500"
           }`}
         >
-          <span className="text-xl">🎫</span>
+          <span className="text-xl mb-0.5">🎫</span>
           <span>{t.history}</span>
         </button>
 
         <button
           onClick={() => setActiveTab("support")}
-          className={`flex-1 py-3 flex flex-col items-center text-xs font-medium ${
-            activeTab === "support" ? "text-primary-600" : "text-gray-500"
+          className={`flex-1 py-3 flex flex-col items-center text-xs font-medium transition ${
+            activeTab === "support" ? "text-primary-600 dark:text-primary-400" : "text-gray-500"
           }`}
         >
-          <span className="text-xl">💬</span>
+          <span className="text-xl mb-0.5">💬</span>
           <span>{t.support}</span>
         </button>
       </nav>
     </div>
   );
 }
-
     const root = ReactDOM.createRoot(document.getElementById("root"));
     root.render(<App />);
   </script>
