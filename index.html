@@ -419,6 +419,7 @@
     }
 
 
+    const root = ReactDOM.createRoot(document.getElementById("root"));
 function App() {
   const saved = loadSettings();
 
@@ -431,19 +432,27 @@ function App() {
   const [gameId, setGameId] = useState(saved.gameId || "6aus49");
   const [tickets, setTickets] = useState(loadTickets);
 
+  // Tester
   const [testerCountry, setTesterCountry] = useState("");
   const [testerGmail, setTesterGmail] = useState("user@gmail.com");
   const [testerNote, setTesterNote] = useState("");
 
-  // Keep these for later (Draw tab)
-  const [manual, setManual] = useState(false);
-  const [lotteryName, setLotteryName] = useState("");
+  // Draw related
   const [mainCount, setMainCount] = useState(6);
   const [mainMax, setMainMax] = useState(49);
   const [bonusCount, setBonusCount] = useState(1);
   const [bonusMin, setBonusMin] = useState(0);
   const [bonusMax, setBonusMax] = useState(9);
   const [bonusLabel, setBonusLabel] = useState("Superzahl");
+  const [lotteryName, setLotteryName] = useState("");
+
+  const [mainPool, setMainPool] = useState([]);
+  const [mainNums, setMainNums] = useState([]);
+  const [bonusNums, setBonusNums] = useState([]);
+  const [phase, setPhase] = useState("idle"); // idle | main | bonus | done
+  const [message, setMessage] = useState("");
+  const [savedThisDraw, setSavedThisDraw] = useState(false);
+  const [showRandomInfo, setShowRandomInfo] = useState(false);
 
   const t = translations[lang] || translations.en;
 
@@ -461,15 +470,14 @@ function App() {
     saveSettings({ lang, dark, countryId, gameId });
     document.documentElement.classList.toggle("dark", dark);
 
-    // RTL support for oriental languages
     const rtlLanguages = ["he", "ar"];
     document.documentElement.dir = rtlLanguages.includes(lang) ? "rtl" : "ltr";
     document.documentElement.lang = lang;
   }, [lang, dark, countryId, gameId]);
 
-  // Update game settings when lottery changes
+  // Sync game settings when lottery changes
   useEffect(() => {
-    if (!manual && selectedGame) {
+    if (selectedGame) {
       setMainCount(selectedGame.mainCount);
       setMainMax(selectedGame.mainMax);
       setBonusCount(selectedGame.bonusCount);
@@ -477,10 +485,109 @@ function App() {
       setBonusMax(selectedGame.bonusMax);
       setBonusLabel(selectedGame.bonusLabel || "Bonus");
       setLotteryName(selectedGame.name);
+      // Reset drawing when lottery changes
+      setPhase("idle");
+      setMainNums([]);
+      setBonusNums([]);
+      setSavedThisDraw(false);
+      setMessage("");
     }
-  }, [selectedGame, manual]);
+  }, [selectedGame]);
 
   // ---------- Helpers ----------
+  const secureRandomInt = (maxExclusive) => {
+    if (maxExclusive <= 0) return 0;
+    const arr = new Uint32Array(1);
+    const max = Math.floor(0x100000000 / maxExclusive) * maxExclusive;
+    let x;
+    do {
+      crypto.getRandomValues(arr);
+      x = arr[0];
+    } while (x >= max);
+    return x % maxExclusive;
+  };
+
+  const shuffle = (arr) => {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = secureRandomInt(i + 1);
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+
+  const startDrawing = () => {
+    const digits = selectedGame?.digitMode;
+    if (!digits && (mainCount < 1 || mainMax < mainCount)) {
+      alert("Invalid settings");
+      return;
+    }
+    setMainPool(digits ? [] : shuffle(Array.from({ length: mainMax }, (_, i) => i + 1)));
+    setMainNums([]);
+    setBonusNums([]);
+    setPhase("main");
+    setMessage("");
+    setSavedThisDraw(false);
+  };
+
+  const drawNext = () => {
+    if (phase === "main" && selectedGame?.digitMode) {
+      const lo = selectedGame.digitMin ?? 0;
+      const hi = selectedGame.digitMax ?? 9;
+      const next = lo + secureRandomInt(hi - lo + 1);
+      const updated = [...mainNums, next];
+      setMainNums(updated);
+      if (updated.length >= mainCount) {
+        setPhase(bonusCount > 0 ? "bonus" : "done");
+      }
+      return;
+    }
+
+    if (phase === "main") {
+      if (mainPool.length === 0) return;
+      const next = mainPool[0];
+      const updated = [...mainNums, next].sort((a, b) => a - b);
+      setMainPool(mainPool.slice(1));
+      setMainNums(updated);
+      if (updated.length >= mainCount) {
+        setPhase(bonusCount > 0 ? "bonus" : "done");
+      }
+    } else if (phase === "bonus") {
+      const fromMain = selectedGame?.bonusFromMainPool;
+      let next;
+      if (fromMain) {
+        const remaining = Array.from({ length: mainMax }, (_, i) => i + 1)
+          .filter(n => !mainNums.includes(n) && !bonusNums.includes(n));
+        if (remaining.length === 0) return;
+        next = remaining[secureRandomInt(remaining.length)];
+      } else {
+        next = bonusMin + secureRandomInt(bonusMax - bonusMin + 1);
+      }
+      const updated = [...bonusNums, next];
+      setBonusNums(updated);
+      if (updated.length >= bonusCount) setPhase("done");
+    }
+  };
+
+  const saveCurrentTicket = () => {
+    const ticket = {
+      id: Date.now(),
+      name: lotteryName || selectedGame?.name || `\( {mainCount}/ \){mainMax}`,
+      country: selectedCountry?.name || "",
+      date: new Date().toISOString(),
+      mainNums: [...mainNums],
+      bonusNums: [...bonusNums],
+      bonusLabel: bonusLabel,
+      resultsUrl: selectedGame?.resultsUrl || ""
+    };
+    const updated = [ticket, ...tickets];
+    setTickets(updated);
+    saveTickets(updated);
+    setSavedThisDraw(true);
+    setMessage(t.saved);
+    setTimeout(() => setMessage(""), 2500);
+  };
+
   const emailTester = () => {
     const gmail = (testerGmail.trim() || "user@gmail.com");
     if (!gmail.includes("@")) {
@@ -501,8 +608,6 @@ function App() {
 
       {/* ===== HEADER ===== */}
       <header className="sticky top-0 z-20 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 space-y-3 shadow-sm">
-        
-        {/* Title + Dark mode */}
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-bold truncate">{t.appTitle}</h1>
           <button
@@ -513,7 +618,6 @@ function App() {
           </button>
         </div>
 
-        {/* Country + Lottery */}
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="text-xs text-gray-500 dark:text-gray-400">{t.country}</span>
@@ -523,9 +627,7 @@ function App() {
                 const newCountryId = e.target.value;
                 setCountryId(newCountryId);
                 const country = LOTTERY_DATA.find(c => c.id === newCountryId);
-                if (country && country.games.length > 0) {
-                  setGameId(country.games[0].id);
-                }
+                if (country?.games?.length) setGameId(country.games[0].id);
               }}
               className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm"
             >
@@ -549,7 +651,6 @@ function App() {
           </label>
         </div>
 
-        {/* Language */}
         <div className="flex justify-end">
           <select
             value={lang}
@@ -568,32 +669,155 @@ function App() {
       {/* ===== MAIN CONTENT ===== */}
       <main className="flex-1 overflow-y-auto p-4">
 
-        {/* DRAW TAB - Placeholder */}
+        {/* ==================== DRAW TAB ==================== */}
         {activeTab === "draw" && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 text-center shadow">
-            <h2 className="text-xl font-bold mb-2">{t.setup}</h2>
-            <p className="text-gray-500 dark:text-gray-400 mb-1">
-              {selectedCountry?.name} → {selectedGame?.name}
-            </p>
-            <p className="text-sm text-gray-400">Draw tab coming next...</p>
+          <div className="space-y-4">
+            {/* Summary */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow">
+              <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.summary}</div>
+              <div className="font-bold text-lg">{lotteryName || selectedGame?.name}</div>
+              <div className="text-sm mt-1">
+                {mainCount} {t.numbers} (1–{mainMax})
+                {bonusCount > 0 && (
+                  <span> + {bonusCount} {bonusLabel} ({bonusMin}–{bonusMax})</span>
+                )}
+              </div>
+            </div>
+
+            {/* Drawing area */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow">
+              {/* Main numbers */}
+              <div className="mb-5">
+                <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">{t.combination}</div>
+                <div className="flex flex-wrap gap-2 justify-center min-h-[3.5rem]">
+                  {mainNums.length === 0 ? (
+                    <span className="text-gray-400 text-sm">—</span>
+                  ) : (
+                    mainNums.map((n, i) => (
+                      <div key={i} className="number-ball bg-primary-600 text-white">{n}</div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Bonus numbers */}
+              {bonusCount > 0 && (
+                <div className="mb-5">
+                  <div className="text-sm font-medium text-amber-600 dark:text-amber-400 mb-2">
+                    {bonusLabel || t.bonus}
+                  </div>
+                  <div className="flex flex-wrap gap-2 justify-center min-h-[3.5rem]">
+                    {bonusNums.length === 0 ? (
+                      <span className="text-gray-400 text-sm">—</span>
+                    ) : (
+                      bonusNums.map((n, i) => (
+                        <div key={i} className="bonus-ball">{n}</div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Status */}
+              <div className="text-center text-sm text-gray-500 dark:text-gray-400 mb-4">
+                {phase === "main" && mainPool.length > 0 && (
+                  <>{t.remaining}: <strong>{mainPool.length}</strong></>
+                )}
+                {phase === "bonus" && (
+                  <>{bonusLabel} ({bonusNums.length}/{bonusCount})</>
+                )}
+                {phase === "done" && (
+                  <span className="text-green-600 dark:text-green-400 font-semibold">{t.done}</span>
+                )}
+              </div>
+
+              {message && (
+                <div className="mb-4 text-center text-green-600 dark:text-green-400 font-medium">
+                  {message}
+                </div>
+              )}
+
+              {/* Buttons */}
+              <div className="space-y-3">
+                {phase === "idle" && (
+                  <button
+                    onClick={startDrawing}
+                    className="w-full py-4 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-bold text-lg"
+                  >
+                    {t.start}
+                  </button>
+                )}
+
+                {(phase === "main" || phase === "bonus") && (
+                  <button
+                    onClick={drawNext}
+                    className="w-full py-4 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-bold text-lg"
+                  >
+                    {phase === "bonus" ? t.nextBonus : t.nextNumber}
+                  </button>
+                )}
+
+                {phase === "done" && (
+                  <button
+                    onClick={saveCurrentTicket}
+                    disabled={savedThisDraw}
+                    className={`w-full py-4 rounded-xl text-white font-semibold ${
+                      savedThisDraw
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-emerald-600 hover:bg-emerald-700"
+                    }`}
+                  >
+                    {savedThisDraw ? t.saved : t.saveTicket}
+                  </button>
+                )}
+
+                {phase !== "idle" && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={startDrawing}
+                      className="flex-1 py-2.5 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-medium"
+                    >
+                      {t.redraw}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setPhase("idle");
+                        setMainNums([]);
+                        setBonusNums([]);
+                        setSavedThisDraw(false);
+                        setMessage("");
+                      }}
+                      className="flex-1 py-2.5 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-medium"
+                    >
+                      {t.newTicket}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Random info */}
+              <button
+                onClick={() => setShowRandomInfo(true)}
+                className="mt-4 w-full text-center text-xs text-gray-500 underline"
+              >
+                {t.randomShort}
+              </button>
+            </div>
           </div>
         )}
 
-        {/* TICKETS TAB - Placeholder */}
+        {/* ==================== TICKETS TAB (placeholder) ==================== */}
         {activeTab === "tickets" && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 text-center shadow">
             <h2 className="text-xl font-bold mb-2">{t.history}</h2>
-            <p className="text-gray-500 dark:text-gray-400">
-              {tickets.length} {t.tickets}
-            </p>
+            <p className="text-gray-500">{tickets.length} {t.tickets}</p>
             <p className="text-sm text-gray-400 mt-2">Tickets tab coming next...</p>
           </div>
         )}
 
-        {/* SUPPORT TAB */}
+        {/* ==================== SUPPORT TAB ==================== */}
         {activeTab === "support" && (
           <div className="space-y-4">
-            {/* Be a Tester */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow">
               <h2 className="text-lg font-bold mb-2">{t.beTester}</h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{t.testerPitch}</p>
@@ -651,7 +875,6 @@ function App() {
               </button>
             </div>
 
-            {/* Support & Web links */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow space-y-3">
               <a
                 href="mailto:riacht+lotty@gmail.com?subject=Lottery%20Number%20Picker%20Support"
@@ -659,7 +882,6 @@ function App() {
               >
                 {t.support}
               </a>
-
               <a
                 href="https://riacht.github.io/lotty-web/"
                 target="_blank"
@@ -677,7 +899,7 @@ function App() {
       <nav className="sticky bottom-0 z-20 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex">
         <button
           onClick={() => setActiveTab("draw")}
-          className={`flex-1 py-3 flex flex-col items-center text-xs font-medium transition ${
+          className={`flex-1 py-3 flex flex-col items-center text-xs font-medium ${
             activeTab === "draw" ? "text-primary-600 dark:text-primary-400" : "text-gray-500"
           }`}
         >
@@ -687,7 +909,7 @@ function App() {
 
         <button
           onClick={() => setActiveTab("tickets")}
-          className={`flex-1 py-3 flex flex-col items-center text-xs font-medium transition ${
+          className={`flex-1 py-3 flex flex-col items-center text-xs font-medium ${
             activeTab === "tickets" ? "text-primary-600 dark:text-primary-400" : "text-gray-500"
           }`}
         >
@@ -697,7 +919,7 @@ function App() {
 
         <button
           onClick={() => setActiveTab("support")}
-          className={`flex-1 py-3 flex flex-col items-center text-xs font-medium transition ${
+          className={`flex-1 py-3 flex flex-col items-center text-xs font-medium ${
             activeTab === "support" ? "text-primary-600 dark:text-primary-400" : "text-gray-500"
           }`}
         >
@@ -705,10 +927,33 @@ function App() {
           <span>{t.support}</span>
         </button>
       </nav>
+
+      {/* Random info modal */}
+      {showRandomInfo && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4"
+          onClick={() => setShowRandomInfo(false)}
+        >
+          <div
+            className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold mb-3">{t.randomTitle}</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{t.randomBody1}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{t.randomBody2}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-5">{t.randomBody3}</p>
+            <button
+              onClick={() => setShowRandomInfo(false)}
+              className="w-full py-3 rounded-xl bg-primary-600 text-white font-semibold"
+            >
+              {t.gotIt}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-    const root = ReactDOM.createRoot(document.getElementById("root"));
     root.render(<App />);
   </script>
 </body>
