@@ -577,10 +577,9 @@ ru: {
       return <div className="bonus-ball">{num}</div>;
     }
 
-
-    const root = ReactDOM.createRoot(document.getElementById("root"));
 function App() {
   const saved = loadSettings();
+  const APP_VERSION = "1.1.0";
 
   // ---------- State ----------
   const [lang, setLang] = useState(saved.lang || "en");
@@ -596,7 +595,7 @@ function App() {
   const [testerGmail, setTesterGmail] = useState("user@gmail.com");
   const [testerNote, setTesterNote] = useState("");
 
-  // Draw related
+  // Draw
   const [mainCount, setMainCount] = useState(6);
   const [mainMax, setMainMax] = useState(49);
   const [bonusCount, setBonusCount] = useState(1);
@@ -608,10 +607,13 @@ function App() {
   const [mainPool, setMainPool] = useState([]);
   const [mainNums, setMainNums] = useState([]);
   const [bonusNums, setBonusNums] = useState([]);
-  const [phase, setPhase] = useState("idle"); // idle | main | bonus | done
+  const [phase, setPhase] = useState("idle");
   const [message, setMessage] = useState("");
   const [savedThisDraw, setSavedThisDraw] = useState(false);
   const [showRandomInfo, setShowRandomInfo] = useState(false);
+
+  // Popup
+  const [showLikePopup, setShowLikePopup] = useState(false);
 
   const t = translations[lang] || translations.en;
 
@@ -624,17 +626,21 @@ function App() {
     [selectedCountry, gameId]
   );
 
+  // Tickets for current lottery
+  const currentLotteryTickets = useMemo(() => {
+    const name = lotteryName || selectedGame?.name || "";
+    return tickets.filter(tk => tk.name === name);
+  }, [tickets, lotteryName, selectedGame]);
+
   // ---------- Effects ----------
   useEffect(() => {
     saveSettings({ lang, dark, countryId, gameId });
     document.documentElement.classList.toggle("dark", dark);
-
     const rtlLanguages = ["he", "ar"];
     document.documentElement.dir = rtlLanguages.includes(lang) ? "rtl" : "ltr";
     document.documentElement.lang = lang;
   }, [lang, dark, countryId, gameId]);
 
-  // Sync game settings when lottery changes
   useEffect(() => {
     if (selectedGame) {
       setMainCount(selectedGame.mainCount);
@@ -644,7 +650,6 @@ function App() {
       setBonusMax(selectedGame.bonusMax);
       setBonusLabel(selectedGame.bonusLabel || "Bonus");
       setLotteryName(selectedGame.name);
-      // Reset drawing when lottery changes
       setPhase("idle");
       setMainNums([]);
       setBonusNums([]);
@@ -696,21 +701,16 @@ function App() {
       const next = lo + secureRandomInt(hi - lo + 1);
       const updated = [...mainNums, next];
       setMainNums(updated);
-      if (updated.length >= mainCount) {
-        setPhase(bonusCount > 0 ? "bonus" : "done");
-      }
+      if (updated.length >= mainCount) setPhase(bonusCount > 0 ? "bonus" : "done");
       return;
     }
-
     if (phase === "main") {
       if (mainPool.length === 0) return;
       const next = mainPool[0];
       const updated = [...mainNums, next].sort((a, b) => a - b);
       setMainPool(mainPool.slice(1));
       setMainNums(updated);
-      if (updated.length >= mainCount) {
-        setPhase(bonusCount > 0 ? "bonus" : "done");
-      }
+      if (updated.length >= mainCount) setPhase(bonusCount > 0 ? "bonus" : "done");
     } else if (phase === "bonus") {
       const fromMain = selectedGame?.bonusFromMainPool;
       let next;
@@ -736,7 +736,7 @@ function App() {
       date: new Date().toISOString(),
       mainNums: [...mainNums],
       bonusNums: [...bonusNums],
-      bonusLabel: bonusLabel,
+      bonusLabel,
       resultsUrl: selectedGame?.resultsUrl || ""
     };
     const updated = [ticket, ...tickets];
@@ -745,6 +745,24 @@ function App() {
     setSavedThisDraw(true);
     setMessage(t.saved);
     setTimeout(() => setMessage(""), 2500);
+
+    // Show "Liked the app?" popup only once
+    const alreadyAsked = localStorage.getItem("lotty-liked-asked");
+    if (!alreadyAsked) {
+      setTimeout(() => setShowLikePopup(true), 600);
+    }
+  };
+
+  const handleLikePopup = (yes) => {
+    setShowLikePopup(false);
+    localStorage.setItem("lotty-liked-asked", "1");
+    if (yes) setActiveTab("more");
+  };
+
+  const deleteTicket = (id) => {
+    const updated = tickets.filter(tk => tk.id !== id);
+    setTickets(updated);
+    saveTickets(updated);
   };
 
   const emailTester = () => {
@@ -760,6 +778,36 @@ function App() {
     );
     window.location.href = "mailto:riacht+lotty@gmail.com?subject=" + subject + "&body=" + body;
   };
+
+  // Simple ticket card
+  const TicketCard = ({ tk }) => (
+    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow mb-3">
+      <div className="flex justify-between items-start mb-2">
+        <div>
+          <div className="font-semibold">{tk.name}</div>
+          <div className="text-xs text-gray-500">
+            {tk.country && `${tk.country} · `}
+            {new Date(tk.date).toLocaleString()}
+          </div>
+        </div>
+        <button onClick={() => deleteTicket(tk.id)} className="text-red-500 text-sm">
+          {t.delete}
+        </button>
+      </div>
+      <div className="flex flex-wrap gap-1.5 mt-2">
+        {tk.mainNums.map((n, i) => (
+          <span key={i} className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary-600 text-white text-sm font-bold">
+            {n}
+          </span>
+        ))}
+        {tk.bonusNums?.length > 0 && tk.bonusNums.map((n, i) => (
+          <span key={"b"+i} className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-500 text-white text-sm font-bold">
+            {n}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 
   // ---------- Render ----------
   return (
@@ -828,11 +876,11 @@ function App() {
       {/* ===== MAIN CONTENT ===== */}
       <main className="flex-1 overflow-y-auto p-4">
 
-        {/* ==================== DRAW TAB ==================== */}
+        {/* ========== DRAW TAB ========== */}
         {activeTab === "draw" && (
           <div className="space-y-4">
-            {/* Summary */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow">
+              <h2 className="text-lg font-bold mb-1">{t.start || "Draw your numbers"}</h2>
               <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.summary}</div>
               <div className="font-bold text-lg">{lotteryName || selectedGame?.name}</div>
               <div className="text-sm mt-1">
@@ -843,9 +891,7 @@ function App() {
               </div>
             </div>
 
-            {/* Drawing area */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow">
-              {/* Main numbers */}
               <div className="mb-5">
                 <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">{t.combination}</div>
                 <div className="flex flex-wrap gap-2 justify-center min-h-[3.5rem]">
@@ -859,7 +905,6 @@ function App() {
                 </div>
               </div>
 
-              {/* Bonus numbers */}
               {bonusCount > 0 && (
                 <div className="mb-5">
                   <div className="text-sm font-medium text-amber-600 dark:text-amber-400 mb-2">
@@ -877,7 +922,6 @@ function App() {
                 </div>
               )}
 
-              {/* Status */}
               <div className="text-center text-sm text-gray-500 dark:text-gray-400 mb-4">
                 {phase === "main" && mainPool.length > 0 && (
                   <>{t.remaining}: <strong>{mainPool.length}</strong></>
@@ -896,7 +940,6 @@ function App() {
                 </div>
               )}
 
-              {/* Buttons */}
               <div className="space-y-3">
                 {phase === "idle" && (
                   <button
@@ -921,9 +964,7 @@ function App() {
                     onClick={saveCurrentTicket}
                     disabled={savedThisDraw}
                     className={`w-full py-4 rounded-xl text-white font-semibold ${
-                      savedThisDraw
-                        ? "bg-gray-400 cursor-not-allowed"
-                        : "bg-emerald-600 hover:bg-emerald-700"
+                      savedThisDraw ? "bg-gray-400 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"
                     }`}
                   >
                     {savedThisDraw ? t.saved : t.saveTicket}
@@ -932,10 +973,7 @@ function App() {
 
                 {phase !== "idle" && (
                   <div className="flex gap-2">
-                    <button
-                      onClick={startDrawing}
-                      className="flex-1 py-2.5 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-medium"
-                    >
+                    <button onClick={startDrawing} className="flex-1 py-2.5 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-medium">
                       {t.redraw}
                     </button>
                     <button
@@ -954,7 +992,6 @@ function App() {
                 )}
               </div>
 
-              {/* Random info */}
               <button
                 onClick={() => setShowRandomInfo(true)}
                 className="mt-4 w-full text-center text-xs text-gray-500 underline"
@@ -965,18 +1002,44 @@ function App() {
           </div>
         )}
 
-        {/* ==================== TICKETS TAB (placeholder) ==================== */}
+        {/* ========== TICKETS TAB (current lottery) ========== */}
         {activeTab === "tickets" && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 text-center shadow">
-            <h2 className="text-xl font-bold mb-2">{t.history}</h2>
-            <p className="text-gray-500">{tickets.length} {t.tickets}</p>
-            <p className="text-sm text-gray-400 mt-2">Tickets tab coming next...</p>
+          <div>
+            <h2 className="text-lg font-bold mb-1">
+              {t.history} – {lotteryName || selectedGame?.name}
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              {currentLotteryTickets.length} {t.tickets}
+            </p>
+
+            {currentLotteryTickets.length === 0 ? (
+              <p className="text-center text-gray-500 mt-10">{t.noTickets}</p>
+            ) : (
+              currentLotteryTickets.map(tk => <TicketCard key={tk.id} tk={tk} />)
+            )}
           </div>
         )}
 
-        {/* ==================== SUPPORT TAB ==================== */}
-        {activeTab === "support" && (
+        {/* ========== ALL TICKETS TAB ========== */}
+        {activeTab === "all" && (
+          <div>
+            <h2 className="text-lg font-bold mb-1">{t.allTickets || "All tickets"}</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              {tickets.length} {t.tickets}
+            </p>
+
+            {tickets.length === 0 ? (
+              <p className="text-center text-gray-500 mt-10">{t.noTickets}</p>
+            ) : (
+              tickets.map(tk => <TicketCard key={tk.id} tk={tk} />)
+            )}
+          </div>
+        )}
+
+        {/* ========== MORE TAB ========== */}
+        {activeTab === "more" && (
           <div className="space-y-4">
+            {/* Be a Tester */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow">
               <h2 className="text-lg font-bold mb-2">{t.beTester}</h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{t.testerPitch}</p>
@@ -1034,6 +1097,7 @@ function App() {
               </button>
             </div>
 
+            {/* Support links */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow space-y-3">
               <a
                 href="mailto:riacht+lotty@gmail.com?subject=Lottery%20Number%20Picker%20Support"
@@ -1049,6 +1113,19 @@ function App() {
               >
                 {t.openWeb}
               </a>
+            </div>
+
+            {/* About */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow text-center">
+              <div className="text-4xl mb-3">🎲</div>
+              <h2 className="text-xl font-bold mb-1">{t.appTitle}</h2>
+              <p className="text-sm text-gray-500 mb-3">Version {APP_VERSION}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Developed by <strong>riacht</strong>
+              </p>
+              <p className="text-xs text-gray-400 mt-2">
+                riacht+lotty@gmail.com
+              </p>
             </div>
           </div>
         )}
@@ -1077,42 +1154,71 @@ function App() {
         </button>
 
         <button
-          onClick={() => setActiveTab("support")}
+          onClick={() => setActiveTab("all")}
           className={`flex-1 py-3 flex flex-col items-center text-xs font-medium ${
-            activeTab === "support" ? "text-primary-600 dark:text-primary-400" : "text-gray-500"
+            activeTab === "all" ? "text-primary-600 dark:text-primary-400" : "text-gray-500"
           }`}
         >
-          <span className="text-xl mb-0.5">💬</span>
-          <span>{t.support}</span>
+          <span className="text-xl mb-0.5">📋</span>
+          <span>{t.allTickets || "All"}</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("more")}
+          className={`flex-1 py-3 flex flex-col items-center text-xs font-medium ${
+            activeTab === "more" ? "text-primary-600 dark:text-primary-400" : "text-gray-500"
+          }`}
+        >
+          <span className="text-xl mb-0.5">⋯</span>
+          <span>More</span>
         </button>
       </nav>
 
       {/* Random info modal */}
       {showRandomInfo && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4"
-          onClick={() => setShowRandomInfo(false)}
-        >
-          <div
-            className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-xl"
-            onClick={e => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setShowRandomInfo(false)}>
+          <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-bold mb-3">{t.randomTitle}</h3>
             <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{t.randomBody1}</p>
             <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{t.randomBody2}</p>
             <p className="text-sm text-gray-600 dark:text-gray-300 mb-5">{t.randomBody3}</p>
-            <button
-              onClick={() => setShowRandomInfo(false)}
-              className="w-full py-3 rounded-xl bg-primary-600 text-white font-semibold"
-            >
+            <button onClick={() => setShowRandomInfo(false)} className="w-full py-3 rounded-xl bg-primary-600 text-white font-semibold">
               {t.gotIt}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Liked the app? popup */}
+      {showLikePopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-xl text-center">
+            <div className="text-4xl mb-3">😊</div>
+            <h3 className="text-lg font-bold mb-2">Enjoying Lotty?</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
+              Would you like to become a tester and get new features earlier?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => handleLikePopup(false)}
+                className="flex-1 py-3 rounded-xl bg-gray-200 dark:bg-gray-700 font-medium"
+              >
+                Not now
+              </button>
+              <button
+                onClick={() => handleLikePopup(true)}
+                className="flex-1 py-3 rounded-xl bg-primary-600 text-white font-semibold"
+              >
+                Yes
+              </button>
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 }
+    const root = ReactDOM.createRoot(document.getElementById("root"));
     root.render(<App />);
   </script>
 </body>
